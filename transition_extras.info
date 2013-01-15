@@ -1,0 +1,8 @@
+; $Id$
+name = Transition Extras
+description = Module to hold all the little Transition knick-knacks	
+package = Transition Network
+core = 6.x
+; 
+version = "6.x"
+core = "6.x"

@@ -1,0 +1,74 @@
+.hometus { 
+/*  overflow: hidden;  */
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.hometus .panel-banner,
+.hometus .main-wrapper,
+.hometus .quad-wrapper { 
+  width: 99.9%; 
+  clear: both;
+}
+
+.hometus .panel-banner .inside {
+  margin-bottom: .5em;
+}
+
+.hometus .panel-col-top .inside,
+.hometus .panel-col-middle .inside {
+  margin-bottom: .5em;
+}
+
+.hometus .main-wrapper .panel-col-first { 
+  float: left; 
+  width: 75%; 
+}
+* html .hometus .main-wrapper .panel-col-first {
+  width: 74.9%;
+}
+
+.hometus .panel-col-first .inside { 
+  margin: 0 .8em .5em 0;
+}
+
+.hometus .main-wrapper .panel-col-last { 
+  float: left; 
+  width: 25%; 
+}
+* html .hometus .main-wrapper .panel-col-last {
+  width: 24.9%;
+}
+
+.hometus .panel-col-last .inside { 
+  margin: 0 0 .5em .8em;
+}
+
+
+.hometus .panel-separator {
+  margin: 0 0 1em 0;
+}
+
+.hometus .quad-wrapper .panel-col-first,
+.hometus .quad-wrapper .panel-col-second,
+.hometus .quad-wrapper .panel-col-third,
+.hometus .quad-wrapper .panel-col-fourth { 
+  float: left; 
+  width: 25%; 
+}
+* html .hometus .quad-wrapper .panel-col-first,
+* html .hometus .quad-wrapper .panel-col-second,
+* html .hometus .quad-wrapper .panel-col-third,
+* html .hometus .quad-wrapper .panel-col-fourth {
+  width: 24.9%;
+}
+
+.hometus  .quad-wrapper .panel-col-first .inside { margin: 0 1.2em .5em 0 }
+.hometus  .quad-wrapper .panel-col-second .inside { margin: 0 .9em .5em .3em }
+.hometus  .quad-wrapper .panel-col-third .inside { margin: 0 .3em .5em .9em }
+.hometus  .quad-wrapper .panel-col-fourth .inside { margin: 0 0 .5em 1.2em }
+
+
+.hometus .panel-separator {
+  margin: 0 0 1em 0;
+}

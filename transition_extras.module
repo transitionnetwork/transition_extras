@@ -1,0 +1,264 @@
+<?php
+/**
+* Transition Extras module
+*
+* This module simply holds all ad-hoc customisations required by the
+* Transition Network
+*
+* LICENSE: program is distributed under the terms of the GNU General
+* Public License
+*
+* @category  Transition Network
+* @package   transition_extras
+* @author    Orig <john_mcgeechan@yahoo.co.uk>, Upd <jim@i-jk.co.uk>
+* @copyright 2009 Transition network
+* @license   http://www.gnu.org/licenses/gpl.txt GNU General Public License
+* @link      http://transitionnetwork.org
+*
+* NOTE!
+* - ensure that weighting of this module is higher than content profile
+*   registration module
+*/
+
+/**
+ * Implementation of hook_init
+ *
+ * Init logic goes here, this presently switches the theme according to
+ * whether we're viewing a CMS or Workspace. Also disables password
+ * strength checking.
+ */
+function transition_extras_init() {
+
+  // This code switches the theme according to whether we're viewing a
+  // CMS or Workspace
+
+  // get the path, then strip http(s)://
+  $path = url($_GET['q']) . '/';
+  // use our CMS theme if domain starts with /cms/ or /og
+  if ((strpos($path, '/cms/') === 0) || (strpos($path, '/og/') === 0)) {
+    global $custom_theme;
+    $custom_theme = 'transitioncms';
+    init_theme();
+  }
+  else { // belt and braces
+    $custom_theme = 'transition';
+
+    // If the user is currently on a user/* page or the admin/user/user
+    // page, insert the JS.
+    if (arg(0) === 'user'
+      || (arg(0) === 'admin' && arg(1) === 'user' && arg(2) === 'user' )) {
+      drupal_add_js(
+        'Drupal.behaviors.password = function () {};',
+        'inline',
+        'footer'
+      );
+    }
+  }
+
+}
+
+/**
+ * implementation of hook_form_alter
+ *
+ * Place all form overrides within this logic
+ *
+ * @param array $form
+ *  Array of form elements that comprise the form.
+ * @param array $form_state
+ *  Array containing the current form state.
+ * @param string $form_id
+ *  String representing the name of the form.
+ */
+function transition_extras_form_alter(&$form, $form_state, $form_id) {
+
+  // handle form
+  switch ($form_id) {
+    case "user_register": // user register overrides
+      // add the register logic
+      $form['#pre_render'][] = '_transition_extras_rearrange_registration_form';
+      drupal_add_js(
+        drupal_get_path('module', 'transition_extras') . '/js/real-username-register.js'
+      );
+      break;
+
+    case "profile_node_form": // content profile node
+      $form['#pre_render'][] = '_transition_extras_user_profile_tweak';
+      break;
+
+    case "user_profile_form": // user account/profile
+      $form['#pre_render'][] = '_transition_extras_user_account_tweak';
+      break;
+
+    case "contact_mail_page": // site-wide contact form
+      $form['submit']['#value'] = t('Send'); // relabel submit
+      break;
+
+  };
+  // try to hide revision form non-admins
+  if (isset($form['#node']) && isset($form['revision_information']) && $form_id == $form['#node']->type .'_node_form') {
+    global $user;
+    $form['revision_information']['#access'] = user_access('administer nodes');
+  }
+
+}
+
+/**
+ * Implementation of hook_ctools_plugin_directory().
+ *
+ * It simply tells panels where to find the .inc files that define various args,
+ * contexts, content_types. In this case the subdirectories of
+ * ctools_plugin_example/panels are used.
+ */
+function  transition_extras_ctools_plugin_directory($module, $plugin) {
+  if (!empty($plugin)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implementation of hook_nodeapi
+ *
+ * @param array  $node reference to node
+ * @param string $op   operation being performed
+ *
+ * @return elements
+ */
+function transition_extras_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  switch ($op) {
+    case 'prepare': // the form is being built
+      // good place to add some js...
+      switch ($node->type) {
+        case 'initiative_profile':
+        case 'project_profile':
+        case 'profile':
+          // add/edit initiative profiles
+          drupal_add_js(
+            drupal_get_path('module', 'transition_extras') .'/js/sync-location-regions.js'
+          );
+          break;
+
+      }
+      break;
+
+    case 'insert' : // The node is being created (inserted in the database).
+      if ($node->type == 'imported_news' || $node->type == 'imported_blogs' || $node->type == 'imported_event') {
+        _transition_extras_modify_imported_feeds_insert($node);
+      }
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_fivestar_widgets
+ *
+ * adds custom TN 'leaf' fivestar widget style
+ */
+function transition_extras_fivestar_widgets() {
+  $widgets_directory = drupal_get_path('module', 'transition_extras') .'/fivestar-widgets';
+  $files = file_scan_directory($widgets_directory, '\.css$');
+  $widgets = array();
+  foreach ($files as $file) {
+    if (strpos($file->filename, '-rtl.css') === FALSE) {
+      $widgets[$file->filename] = drupal_ucfirst($file->name);
+    }
+  }
+ return $widgets;
+}
+
+/**
+ * Handles creating feedapi nodes. For feeds nodes, ensure relevant parent
+ * attributes are added to the child.
+ *
+ * @param object  $node node object
+ * @return null
+ */
+function _transition_extras_modify_imported_feeds_insert($node) {
+  if ($feed_nid = db_result(db_query("SELECT feed_nid FROM {feeds_node_item} WHERE nid=%d", $node->nid))) {
+    $feed_parent = node_load($feed_nid);
+    // if ($node->field_themes) $node->field_themes = $feed_parent->field_themes; // field to poss be removed...
+    $node->uid = $feed_parent->uid;
+    $node->field_importsource = $feed_parent->field_importsource;
+    node_save($node);
+  };
+}
+
+/**
+ * Adds help to the top of the User Account page (core)
+ */
+function _transition_extras_user_account_tweak($elements) {
+
+  $notice = '<strong>' . t('You are editing your account page') . '</strong><br/>' .
+      t('This is about managing your &apos;account&apos; on this site,
+      with private details - like how you want to receive emails etc. It is
+      not about your public profile; that is on the &apos;User
+      profile&apos; tab above. Please DO NOT FORGET to save your changes
+      when you are finished.');
+
+  $elements['user_notice'] = array(
+  '#type' => 'markup',
+  '#value' => '<div class="help">' . $notice . '</div>',
+  '#weight' => '-100'
+  );
+  return $elements;
+}
+
+/**
+ * _transition_extras_rearrange_registration_form
+ *
+ * Re-arranges profile fields on the registration form
+ *
+ * - Cannot use transition_extras_user_registration_alter as
+ * content_profile_registration module uses hook_form_alter which runs after any
+ * hook_form_FORM_ID_alter !!
+ *
+ * - Also, must use #pre_render as module content_profile_registration_module
+ * does a pre_render and objects to missing elements
+ *
+ * - ensure that weighting of this module is higher than content profile
+ * registration module
+ *
+ * @param array
+ *  $elements form elements
+ */
+function _transition_extras_rearrange_registration_form($elements) {
+  // move name elements from the profile to be just before the username element
+  $elements["account"]["field_name_first"] = $elements["field_name_first"];
+  $elements["account"]["field_name_first"]["#weight"] = $elements["account"]["name"]["#weight"] -3;
+  $elements["account"]["field_name_middle"] = $elements["field_name_middle"];
+  $elements["account"]["field_name_middle"]["#weight"] = $elements["account"]["name"]["#weight"] -2;
+  $elements["account"]["field_name_last"] = $elements["field_name_last"];
+  $elements["account"]["field_name_last"]["#weight"] = $elements["account"]["name"]["#weight"] -1;
+  // go through elements array weeding out the old profile name values
+  $newarray = array();
+  foreach ($elements as $name => $value) {
+    if ($name != "field_name_first" && $name != "field_name_middle" && $name != "field_name_last" ) {
+      $newarray[$name] = $value;
+    };
+  }
+
+  return $newarray;
+}
+
+/**
+ * Adds help to the top of the Profile page (Content Profile module)
+ * and rearranges a few things
+ */
+function _transition_extras_user_profile_tweak($elements) {
+  $notice = '<strong>' . t('You are editing your profile page') . '</strong><br/>' .
+      t('This is about managing what other people can see on your public profile,
+      which appears in the people directory. You can control what is public
+      and what isn&apos;t. The more you add here, the better your experience
+      with the site will be, so please be generous.');
+
+  $elements['user_notice'] = array(
+    '#type' => 'markup',
+    '#value' => '<div class="help">' . $notice . '</div>',
+    '#weight' => '-100'
+  );
+
+  // tweak the order of a few bits
+  $elements["private"]["#weight"] = $elements["field_name_last"]["#weight"] + .25; // 'make profile private'
+
+  $elements["notifications"]["#weight"] = $elements["attachments"]["#weight"] + 1; // 'notifications' fieldset
+  return $elements;
+}
