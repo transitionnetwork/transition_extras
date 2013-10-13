@@ -103,6 +103,31 @@ function transition_extras_form_alter(&$form, $form_state, $form_id) {
 }
 
 /**
+ * Implementation of hook_block()
+ */
+function transition_extras_block($op = 'list', $delta = 0, $edit = array()) {
+  $block = array();
+  switch ($op) {
+    case 'list':
+      $block[0]['info'] = t('User links: Anonymous');
+      $block[1]['info'] = t('User links: Authenticated');
+      return $block;
+    case 'view':
+      switch ($delta) {
+        case 0:
+          $block['subject'] = '';
+          $block['content'] = "User links: Anonymous";
+          break;
+        case 1:
+          $block['subject'] = '';
+          $block['content'] = "User links: Authenticated";
+          break;
+      }
+      return $block;
+  }
+}
+
+/**
  * Implementation of hook_ctools_plugin_directory().
  *
  * It simply tells panels where to find the .inc files that define various args,
@@ -261,4 +286,113 @@ function _transition_extras_user_profile_tweak($elements) {
 
   $elements["notifications"]["#weight"] = $elements["attachments"]["#weight"] + 1; // 'notifications' fieldset
   return $elements;
+}
+
+/**
+ * Default theme function for all RSS rows.
+ */
+function transition_extras_preprocess_views_view_row_rss(&$vars) {
+  $view     = &$vars['view'];
+  $options  = &$vars['options'];
+  $item     = &$vars['row'];
+
+  $vars['title'] = check_plain($item->title);
+  $vars['description'] = check_plain($item->description);
+  // Replace HTTPS tn.org urls with HTTP ones in feed.
+
+  $vars['link'] = _transition_extras_force_http_version(check_url($item->link));
+  if (!empty($item->elements)) {
+    foreach ($item->elements as $key => $element) {
+      //  Replace HTTPS with HTTP on elements.
+      if (isset($element['value'])) {
+        $item->elements[$key]['value'] = _transition_extras_force_http_version($element['value']);
+      }
+      if (isset($element['attributes']['domain'])) {
+        $item->elements[$key]['attributes']['domain'] = _transition_extras_force_http_version($element['attributes']['domain']);
+      }
+    }
+    $vars['item_elements'] = format_xml_elements($item->elements);
+  }
+}
+
+/**
+ * Theme preprocess for an RSS feed.
+ */
+function transition_extras_preprocess_views_view_rss(&$vars) {
+  global $base_url;
+  global $language;
+
+  $view     = &$vars['view'];
+  $options  = &$vars['options'];
+  $items    = &$vars['rows'];
+  $style    = &$view->style_plugin;
+
+  if (!empty($options['mission_description'])) {
+    $description = variable_get('site_mission', '');
+  }
+  else {
+    $description = $options['description'];
+  }
+  // The RSS 2.0 "spec" doesn't indicate HTML can be used in the description.
+  // We strip all HTML tags, but need to prevent double encoding from properly
+  // escaped source data (such as &amp becoming &amp;amp;).
+  $vars['description'] = check_plain(decode_entities(strip_tags($description)));
+
+  if ($view->display_handler->get_option('sitename_title')) {
+    $title = variable_get('site_name', 'Drupal');
+    if ($slogan = variable_get('site_slogan', '')) {
+      $title .= ' - ' . $slogan;
+    }
+  }
+  else {
+    $title = $view->get_title();
+  }
+  $vars['title'] = check_plain($title);
+
+  // Figure out which display which has a path we're using for this feed. If there isn't
+  // one, use the global $base_url.
+  $link_display_id = $view->display_handler->get_link_display();
+  if ($link_display_id && !empty($view->display[$link_display_id])) {
+    $path = $view->display[$link_display_id]->handler->get_path();
+  }
+
+  if ($path) {
+    $path = $view->get_url(NULL, $path);
+    $url_options = array('absolute' => TRUE);
+    if (!empty($view->exposed_raw_input)) {
+      $url_options['query'] = $view->exposed_raw_input;
+    }
+
+    // Compare the link to the default home page; if it's the default home page, just use $base_url.
+    if ($path == variable_get('site_frontpage', 'node')) {
+      $path = '';
+    }
+    // Enforce HTTP scheme for base links.
+    $vars['link'] = _transition_extras_force_http_version(check_url(url($path, $url_options)));
+  }
+
+  $vars['langcode'] = check_plain($language->language);
+  $vars['namespaces'] = drupal_attributes($style->namespaces);
+  $vars['items'] = $items;
+  $vars['channel_elements'] = format_xml_elements($style->channel_elements);
+
+  drupal_set_header('Content-Type: application/rss+xml; charset=utf-8');
+}
+
+/**
+ * Converts any HTTPS link for the TN.org domain into HTTP. Used by RSS feed
+ * preprocess functions, above.
+ */
+function _transition_extras_force_http_version($input) {
+  global $base_url;
+  // Don't change HTTPS urls.
+  if (substr($base_url, 0, 6) != 'https:') {
+    return $input;
+  }
+  // Only change URLs for our domain.
+  if (strpos($input, $base_url) === FALSE) {
+    return $input;
+  }
+  // Replace https with http.
+  return str_replace('https://', 'http://', $input);
 }
