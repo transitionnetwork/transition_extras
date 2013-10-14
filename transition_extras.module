@@ -393,6 +393,10 @@ function _transition_extras_force_http_version($input) {
   if (strpos($input, $base_url) === FALSE) {
     return $input;
   }
+  // Ensure we use www not naked domains.
+  if (strpos($base_url, '://transitionnetwork.org') !== FALSE) {
+    $input = str_replace('://transitionnetwork.org', '://www.transitionnetwork.org', $input);
+  }
   // Replace https with http.
   return str_replace('https://', 'http://', $input);
 }
